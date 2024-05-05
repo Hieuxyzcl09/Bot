@@ -1,0 +1,5 @@
+{
+  "token": "YOUR_DISCORD_BOT_TOKEN",
+  "adminId": "994819569795485747",
+  "allowedChannels": ["1236622858361503794", "CHANNEL_ID_2", "CHANNEL_ID_3", "CHANNEL_ID_4", "CHANNEL_ID_5"]
+}
