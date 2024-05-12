@@ -1,0 +1,158 @@
+import discord
+from discord.ext import tasks, commands
+import datetime
+import traceback
+import os
+import psutil
+import asyncio
+
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix='h!', intents=intents)
+
+kicked_members = {}
+start_time = datetime.datetime.now()
+
+# Định nghĩa danh sách ID kênh cho tiếng Việt và tiếng Anh
+logvn_channels = 1239153498625671178
+logen_channels = 1239074927567441983
+vn_channels = [ "1239153498625671178","]
+en_channels = [ "1239074927567441983","1224374786097025085","1239074927567441983","1224587747298119780","1224375325249634325","1224380043241721876","1230188434748870697"]
+
+@bot.event
+async def on_ready():
+    print(f"We have logged in as {bot.user}")
+    check_members.start()
+
+@tasks.loop(minutes=5)
+async def check_members():
+    try:
+        guild1 = bot.get_guild(1224374441375563826)
+        guild2 = bot.get_guild(839749858687844372)
+        role = discord.utils.get(guild1.roles, id=1228982669493141514)
+
+        for member in guild1.members:
+            if not member.bot:  # Kiểm tra nếu thành viên không phải là bot
+                if guild2.get_member(member.id) is not None:
+                    if role in member.roles:
+                        await member.remove_roles(role)
+                else:
+                    time_since_join = datetime.datetime.now(datetime.timezone.utc) - member.joined_at
+                    if time_since_join.days >= 1 and role in member.roles:
+                        if member.top_role < guild1.me.top_role:
+                            await member.kick(reason="Did not join CCH server")
+                            kicked_members[member.name] = datetime.datetime.now(datetime.timezone.utc)
+                            # Gửi thông báo khi bot đã kick một người
+                            embed = discord.Embed(title="Đã kick thành viên", description=f"{member.name} đã bị kick vào lúc {datetime.datetime.now(datetime.timezone.utc)}", color=discord.Color.red())
+                            for channel_id in logvn_channels:
+                                await bot.get_channel(int(channel_id)).send(embed=embed)  # Gửi thông báo bằng tiếng Việt
+                            embed.title = "Member Kicked"
+                            embed.description = f"{member.name} was kicked at {datetime.datetime.now(datetime.timezone.utc)}"
+                            for channel_id in logen_channels:
+                                await bot.get_channel(int(channel_id)).send(embed=embed)  # Gửi thông báo bằng tiếng Anh
+                        else:
+                            print(f"Cannot kick {member.name} due to insufficient permissions.")
+                    else:
+                        await member.add_roles(role)
+    except Exception as e:
+        tb = traceback.format_exc()
+        embed = discord.Embed(title="Lỗi", description=str(e), color=discord.Color.purple())
+        embed.add_field(name="Traceback", value=f"```\n{tb}\n```", inline=False)
+        for channel_id in logvn_channels:
+            await bot.get_channel(int(channel_id)).send(embed=embed)  # Gửi thông báo lỗi bằng tiếng Việt
+        for channel_id in logen_channels:
+            embed.title = "Error"
+            await bot.get_channel(int(channel_id)).send(embed=embed)  # Gửi thông báo lỗi bằng tiếng Anh
+
+@bot.command()
+async def checklist(ctx):
+    guild1 = ctx.guild
+    guild2 = bot.get_guild(839749858687844372)
+    role = discord.utils.get(guild1.roles, id=1228982669493141514)
+
+    members_with_role = [m for m in guild1.members if role in m.roles]
+    
+    # Tạo embed cho tiếng Việt
+    embed_vn = discord.Embed(title="Danh sách kiểm tra", color=discord.Color.from_rgb(255, 0, 0))
+    embed_vn.add_field(name="Tổng số thành viên trong Server 1", value=str(guild1.member_count), inline=False)
+    embed_vn.add_field(name="Tổng số thành viên trong Server 2", value=str(guild2.member_count), inline=False)
+    
+    # Tạo embed cho tiếng Anh
+    embed_en = discord.Embed(title="Checklist", color=discord.Color.from_rgb(255, 0, 0))
+    embed_en.add_field(name="Total Members in Server 1", value=str(guild1.member_count), inline=False)
+    embed_en.add_field(name="Total Members in Server 2", value=str(guild2.member_count), inline=False)
+    
+    if len(members_with_role) == 0:
+        embed_vn.add_field(name="Không có thành viên nào trong danh sách", value="Không có thành viên nào trong danh sách với ID vai trò đã chỉ định.", inline=False)
+        embed_en.add_field(name="No members in the list", value="There are no members in the list with the specified role ID.", inline=False)
+    else:
+        for member in members_with_role:
+            time_left = datetime.datetime.now(datetime.timezone.utc) - member.joined_at
+            time_left = datetime.timedelta(days=1) - time_left
+            embed_vn.add_field(name=member.name, value=str(time_left), inline=False)
+            embed_en.add_field(name=member.name, value=str(time_left), inline=False)
+    
+    if len(kicked_members) > 0:
+        embed_vn.add_field(name="Thành viên đã bị kick", value="\n".join([f"{name}: {time}" for name, time in kicked_members.items()]), inline=False)
+        embed_en.add_field(name="Kicked Members", value="\n".join([f"{name}: {time}" for name, time in kicked_members.items()]), inline=False)
+    else:
+        embed_vn.add_field(name="Không có thành viên nào đã bị kick", value="Không có thành viên nào đã bị kick bởi bot.", inline=False)
+        embed_en.add_field(name="No members have been kicked", value="No members have been kicked by the bot.", inline=False)
+    
+    # Gửi thông báo checklist bằng tiếng Việt
+    for channel_id in vn_channels:
+        await bot.get_channel(int(channel_id)).send(embed=embed_vn)
+    
+    # Gửi thông báo checklist bằng tiếng Anh
+    for channel_id in en_channels:
+        await bot.get_channel(int(channel_id)).send(embed=embed_en)
+
+@bot.command()
+async def uptime(ctx):
+    current_time = datetime.datetime.now()
+    uptime = current_time - start_time
+    cpu_usage = psutil.cpu_percent(interval=None)
+    ram_usage = psutil.virtual_memory().percent
+    if str(ctx.channel.id) in vn_channels:
+        embed = discord.Embed(title="Thời gian hoạt động và thông tin hệ thống", color=discord.Color.blue())
+        embed.add_field(name="Thời gian hoạt động", value=str(uptime), inline=False)
+        embed.add_field(name="CPU được sử dụng ", value=f"{cpu_usage}%", inline=True)
+        embed.add_field(name="RAM được sử dụng", value=f"{ram_usage}%", inline=True)
+    else:
+        embed = discord.Embed(title="Uptime and System Info", color=discord.Color.blue())
+        embed.add_field(name="Uptime", value=str(uptime), inline=False)
+        embed.add_field(name="CPU Usage", value=f"{cpu_usage}%", inline=True)
+        embed.add_field(name="RAM Usage", value=f"{ram_usage}%", inline=True)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def author(ctx):
+    if str(ctx.channel.id) in vn_channels:
+        embed = discord.Embed(title="Thông tin tác giả", description="Đây là thông tin về tác giả của bot.", color=0x00ff00)
+        embed.set_author(name="Hieuxyz", icon_url="https://www.dmoe.cc/random.php")
+        embed.add_field(name="Tên", value="Hieuxyz")
+        embed.add_field(name="Tuổi", value="15")
+        embed.add_field(name="Giới tính", value="Nam")
+    else:
+        embed = discord.Embed(title="Author information", description="This is information about the bot's author.", color=0x00ff00)
+        embed.set_author(name="Hieuxyz", icon_url="https://www.dmoe.cc/random.php")
+        embed.add_field(name="Name", value="Hieuxyz")
+        embed.add_field(name="Age", value="15")
+        embed.add_field(name="Gender", value="Male")
+    await ctx.send(embed=embed)
+
+@bot.event
+async def on_member_join(member):
+    guild1 = bot.get_guild(1224374441375563826)
+    role = discord.utils.get(guild1.roles, id=1228982669493141514)
+    if role in member.roles:
+        embed = discord.Embed(title="Thành viên mới tham gia", description=f"{member.name} đã tham gia máy chủ với ID vai trò đã chỉ định.", color=discord.Color.pink())
+        await bot.get_channel(channel_id_vietnamese).send(embed=embed)  # Gửi thông báo thành viên mới bằng tiếng Việt
+        embed.title = "New Member Joined"
+        embed.description = f"{member.name} has joined the server with the specified role ID."
+        await bot.get_channel(channel_id_english).send(embed=embed)  # Gửi thông báo thành viên mới bằng tiếng Anh
+
+check_members.before_loop
+async def before_check_members():
+    await bot.wait_until_ready()
+
+bot.run("token")
